@@ -17,7 +17,7 @@ import ipywidgets
 from .utils import OutputWidgetHandler, wrapper
 
 
-class PME:
+class GUI:
     def __init__(self, pipeline_func=None, mode="stream", output_directory=None, camera_id=None, sanity_check_image=None):
         
         self.mode = mode
