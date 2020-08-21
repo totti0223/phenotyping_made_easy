@@ -17,78 +17,75 @@ import ipywidgets
 from .utils import OutputWidgetHandler, wrapper
 
 
-class GUI:
-    def __init__(self, pipeline_func=None, mode="stream", output_directory=None, camera_id=None, sanity_check_image=None):
-        
-        self.mode = mode
+class stream:
+    def __init__(self, pipeline_func=None, output_directory=None, camera_id=None, camera_sets=None, sanity_check_image=None):
+
         self.image = np.zeros(shape=(100, 200, 3),
                               dtype=np.uint8)  # initial image. will be overrided by the sanity image and finally camera input.
-        self.images = None  # processed images
         self.pipeline_func = pipeline_func
         self.camera_id = camera_id
         self.pipeline_func = pipeline_func
+        self.camera_sets = camera_sets
         self.black = np.zeros((1, 1, 3), dtype=np.uint8)
         self.path = os.path.join(os.getcwd(), "data")
-        
-        
+
         if not os.path.exists(self.path):
             os.makedirs(self.path)
         print("- images will be saved to %s" % self.path)
+        self.processed_image_widgets = {}
+
+        if self.pipeline_func:
+            if sanity_check_image:
+                self.image = sanity_check_image
+                assert_image_format(self.image)
+            self.ret = wrapper(self.pipeline_func, self.image)
+
+            if self.ret["csv_logs"] is not None:
+                csv_name = datetime.now().strftime("%Y%m%d_%H%M%S") + ".csv"
+                self.csv_path = os.path.join(self.path,csv_name)
+                print("- csv_logs will be written to %s" % self.csv_path)
+                with open(self.csv_path, "a") as f:
+                    if self.ret["csv_header"] is not None:
+                        self.ret["csv_header"].insert(0,"file_name")
+                        writer = csv.writer(f, lineterminator='\n')
+                        writer.writerow(self.ret["csv_header"])
+
+            self.layout = {'width': str(
+                80/len(self.ret["images"]))+"%", 'height': '1px', 'border': '1px solid black'}
+            for i in range(len(self.ret["images"])):
+                self.processed_image_widgets[str(i)] = ipywidgets.Image(
+                    format='jpeg', value=bytes(cv2.imencode('.jpg', self.image)[1]), layout=self.layout)
+
+        assert self.camera_id is not None, "must specify a camera number for camera streaming"
+
+        # assert video device is closed. must use a global variable for now
+        # cv2.VideoCapture(self.camera_id).release()        
+        self.camera = cv2.VideoCapture(self.camera_id)
+        assert self.camera.isOpened(
+        ), "problem with establishing connection with camera. check connection or camera_id"
+
+        if self.camera_sets is not None:
+            self.camera_sets(self.camera) 
+        success,frame = self.camera.read()
+        assert success == True, "error reading image from camera. check camera settings e.g. resolution, fps, format"
+        #print("\t- camera properly recognized")
+
+        # fps
+        self.fps = 0
+        self.n_frame = 3
+        self.q = deque([time.time() for i in range(self.n_frame)])
+
+        # logging including csv logging
+        self.logger = logging.getLogger("default logger")
+        self.handler = OutputWidgetHandler()  # handler.out is the ipywidgets.Textarea
+        self.handler.setFormatter(logging.Formatter(
+            '%(asctime)s - %(message)s'))
+        self.logger.addHandler(self.handler)
+        self.logger.setLevel(logging.INFO)
         
+        self.launch()
         
-        if self.mode == "stream":  # initialization process
-            print("- running as camera streaming mode")
-
-            self.processed_image_widgets = {}
-
-            if self.pipeline_func:
-                #print("- sanity checking pipeline_func")
-                if sanity_check_image:
-                    self.image = sanity_check_image
-                    assert_image_format(self.image)
-
-                self.images, self.csv_logs, self.stream_logs = wrapper(
-                    self.pipeline_func, self.image)
-                
-                if self.csv_logs is not None:
-                    self.csv_path = os.path.join(self.path,"result.csv")
-                    with open(self.csv_path, "a") as f:
-                        pass
-                    print("- csv_logs will be appended to %s" % self.csv_path)
-                    
-                self.layout = {'width': str(
-                    80/len(self.images))+"%", 'height': '1px', 'border': '1px solid black'}
-                for i in range(len(self.images)):
-                    self.processed_image_widgets[str(i)] = ipywidgets.Image(
-                        format='jpeg', value=bytes(cv2.imencode('.jpg', self.image)[1]), layout=self.layout)
-
-            assert self.camera_id is not None, "must specify a camera number for camera streaming"
-
-            # assert video device is closed
-            cv2.VideoCapture(self.camera_id).release()
-            self.camera = cv2.VideoCapture(self.camera_id)
-            self.camera.set(cv2.CAP_PROP_FOURCC,
-                            cv2.VideoWriter_fourcc(*"MJPG"))
-            self.camera.set(cv2.CAP_PROP_FPS, 30)
-            assert self.camera.isOpened(
-            ), "problem with establishing connection with camera. ex. camera_id=0"
-            self.camera.release()
-            #print("\t- camera properly recognized")
-
-            # fps
-            self.fps = 0
-            self.n_frame = 3
-            self.q = deque([time.time() for i in range(self.n_frame)])
-
-            # logging including csv logging
-            self.logger = logging.getLogger("default logger")
-            self.handler = OutputWidgetHandler()  # handler.out is the ipywidgets.Textarea
-            self.handler.setFormatter(logging.Formatter(
-                '%(asctime)s - %(message)s'))
-            self.logger.addHandler(self.handler)
-            self.logger.setLevel(logging.INFO)
-
-    def stream(self):
+    def launch(self):
         def capture(_):
             
             
@@ -96,24 +93,18 @@ class GUI:
             basefile = base + ".jpg"
             orig_file = os.path.join(self.path, basefile)
             cv2.imwrite(orig_file, self.image)
-            
-            if self.csv_logs is not None:
-                s = []
-                
-                for line in self.csv_logs:
-                    s.append([base, line])
-                with open(self.csv_path, "a") as f:
-                    writer = csv.writer(f, lineterminator='\n')
-                    if isinstance(s[0], list):
-                        writer.writerows(s)
-                    else:
-                        writer.writerow(s)
-                self.logger.info("csv logged as %s" % s)
-            
             self.logger.info("input image saved as %s." % base)
 
-            if self.images is not None and self.image_analysis_widget.value == True:
-                for i, image in enumerate(self.images):
+            if self.ret["csv_logs"] is not None and len(self.ret["csv_logs"]) !=0:                
+                with open(self.csv_path, "a") as f:
+                    writer = csv.writer(f, lineterminator='\n')
+                    for line in self.ret["csv_logs"]:
+                        s = ([base, *line])
+                        writer.writerow(s)
+                self.logger.info("csv logged")
+
+            if self.ret["images"] is not None and self.image_analysis_widget.value == True:
+                for i, image in enumerate(self.ret["images"]):
                     _base = base + "__"+str(i)+".jpg"
                     processed_file = os.path.join(
                         self.path, _base)
@@ -147,26 +138,28 @@ class GUI:
                     if self.pipeline_func is not None:
                         # apply pipeline and visualize processed images only when the analysis checkbox is ticked
                         if self.image_analysis_widget.value:
-                            self.images, self.csv_logs, self.stream_logs = wrapper(
-                                self.pipeline_func, self.image)
-                            for i, image in enumerate(self.images):
+                            #self.images, self.csv_logs, self.stream_logs = wrapper(
+                            #    self.pipeline_func, self.image)
+                            self.ret = wrapper(self.pipeline_func, self.image)
+                            
+                            for i, image in enumerate(self.ret["images"]):
                                 self.processed_image_widgets[str(i)].value = bytes(
                                     cv2.imencode('.jpg', image)[1])
                                 self.processed_image_widgets[str(i)].layout = {'width': str(
-                                    80/len(self.images))+"%", 'border': '1px solid black'}
+                                    80/len(self.ret["images"]))+"%", 'border': '1px solid black'}
                                 
                         else:  # if checkbox is unticked, force the height of the layout to 1px and hide
                             if self.processed_image_widgets["0"].value != bytes(cv2.imencode('.jpg', self.black)[1]):
                                 # do nothing from the second loop
                                 continue
-                            for i, image in enumerate(self.images):
+                            for i, image in enumerate(self.ret["images"]):
                                 self.processed_image_widgets[str(i)].value = bytes(
                                     cv2.imencode('.jpg', self.black)[1])
                                 self.processed_image_widgets[str(i)].layout = {'width': str(
-                                    80/len(self.images))+"%", 'height': '1px', 'border': '1px solid black'}
+                                    80/len(self.ret["images"]))+"%", 'height': '1px', 'border': '1px solid black'}
 
-                        if self.stream_logs and self.streamlogs_widget.value:
-                             self.streamlogs_text_widget.value = str(self.stream_logs)
+                        if self.ret["stream_logs"] and self.streamlogs_widget.value:
+                             self.streamlogs_text_widget.value = str(self.ret["stream_logs"])
                             
 
         def flag(change):
@@ -184,13 +177,9 @@ class GUI:
 
             if change['new'] == 'connect':
                 if self.camera.isOpened() == False:
-                    self.camera = cv2.VideoCapture(0)
-                    self.camera.set(cv2.CAP_PROP_FOURCC,
-                                    cv2.VideoWriter_fourcc(*"MJPG"))
-                    self.camera.set(cv2.CAP_PROP_FPS, 30)
-
-                # args = (self.state_widget, self.camera, self.image_widget,
-                #        self.processed_image_widget, self.handler.out, self.acquire_image_widget)
+                    self.camera = cv2.VideoCapture(self.camera_id)
+                    if self.camera_sets is not None:
+                        self.camera_sets(self.camera)
                 args = self.container
                 execute_thread = threading.Thread(target=live, args=args)
                 execute_thread.start()
@@ -202,8 +191,8 @@ class GUI:
 
          # ipywidgets
         self.state_widget = ipywidgets.ToggleButtons(
-            # options=['exit', 'disconnect', 'pause', 'connect'], description='', value='pause')
-            options=['exit', 'disconnect', 'connect'], description='', value='disconnect')
+            options=['exit', 'disconnect', 'pause', 'connect'], description='', value='pause')
+            #options=['exit', 'disconnect', 'connect'], description='', value='disconnect')
         self.state_widget.observe(flag, names='value')
         self.fps_widget = ipywidgets.Text(
             value="fps: "+str(self.fps), placeholder='stream_logs area', layout={"width": "80%",'border': '1px solid black'})
@@ -211,10 +200,12 @@ class GUI:
             '.jpg', self.image)[1]), layout={"width": "80%", 'border': '1px solid black'})
         self.acquire_image_widget = ipywidgets.Button(
             description="acquire image", tooltip="acquire image")
-        
+        self.hide_input_widget = ipywidgets.Checkbox(
+            value=False, description="Hide Input")
         #basic
         self.container = [self.state_widget, #select stat
                      self.acquire_image_widget, #capture button
+                     self.hide_input_widget,
                      self.image_widget, #display input
                      self.fps_widget,  # fps
                      self.handler.out  # log
@@ -230,17 +221,18 @@ class GUI:
             self.processed_image_widget = ipywidgets.HBox(
                 processed_image_widgets_list)
             
-            self.container.insert(3, self.processed_image_widget)
+            self.container.insert(4, self.processed_image_widget)
             
             self.image_analysis_widget = ipywidgets.Checkbox(
                 value=False, description="Enable Image Analysis Pipeline")
             self.hide_input_widget = ipywidgets.Checkbox(
-                value=False, description="hide input image")
-            
+                value=False, description="Hide Input")
+            del self.container[2] #delete hide_input_widget
             checkboxes = [self.image_analysis_widget, self.hide_input_widget]
-            if self.stream_logs is not None:
+            
+            if self.ret["stream_logs"] is not None:
                 self.streamlogs_widget = ipywidgets.Checkbox(
-                value=False, description="display stream_logs")
+                value=False, description="Display Stream Logs")
                 self.streamlogs_text_widget = ipywidgets.Text(layout={"width": "80%", 'border': '1px solid black'})
                 
                 self.container.insert(-1,self.streamlogs_text_widget) #stream logs    

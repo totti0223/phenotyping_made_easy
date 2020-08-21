@@ -35,7 +35,6 @@ class OutputWidgetHandler(logging.Handler):
         """ Clear the current logs """
         self.out.clear_output()
 
-
 def wrapper(func, image):
     '''
     wrapper function of a custom pipeline. using a wrapper for flexibility in the future.
@@ -45,25 +44,20 @@ def wrapper(func, image):
         ret) == dict, "returned value of a custom pipeline must be a dictionary format"
 
     if "images" not in ret:
-        print("images not in return value. will prepare a pseudo data")
-        images = [np.zeros(shape=(50, 200, 3), dtype=np.uint8)]
+        #print("images not in return value. will prepare a pseudo data")
+        ret["images"] = [np.zeros(shape=(50, 200, 3), dtype=np.uint8)]
     else:
-        images = ret["images"]
-        if type(images) != list:
-            images = [images]
-
+        if type(ret["images"]) != list:
+            ret["images"] = [ret["images"]]
+                             
     if "csv_logs" not in ret:
-        csv_logs = None
+        ret["csv_logs"] = None
     else:
-        csv_logs = ret["csv_logs"]
-        if type(csv_logs) != list:
-            csv_logs = [csv_logs]
-
+        if type(ret["csv_logs"]) != list:
+            ret["csv_logs"] = [ret["csv_logs"]]
+    if "csv_header" not in ret:
+        ret["csv_header"] = None    
     if "stream_logs" not in ret:
-        stream_logs = None
-    else:
-        stream_logs = ret["stream_logs"]
-        if type(stream_logs) != list:
-            stream_logs = [stream_logs]
+        ret["stream_logs"] = None
 
-    return images, csv_logs, stream_logs
+    return ret
