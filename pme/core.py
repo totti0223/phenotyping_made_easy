@@ -95,14 +95,6 @@ class stream:
             cv2.imwrite(orig_file, self.image)
             self.logger.info("input image saved as %s." % base)
 
-            if self.ret["csv_logs"] is not None and len(self.ret["csv_logs"]) !=0:                
-                with open(self.csv_path, "a") as f:
-                    writer = csv.writer(f, lineterminator='\n')
-                    for line in self.ret["csv_logs"]:
-                        s = ([base, *line])
-                        writer.writerow(s)
-                self.logger.info("csv logged")
-
             if self.ret["images"] is not None and self.image_analysis_widget.value == True:
                 for i, image in enumerate(self.ret["images"]):
                     _base = base + "__"+str(i)+".jpg"
@@ -111,6 +103,14 @@ class stream:
                     cv2.imwrite(os.path.join(self.path, processed_file), image)
                     self.logger.info(
                         "processed image saved as %s" % _base)
+
+                if self.ret["csv_logs"] is not None and len(self.ret["csv_logs"]) !=0:                
+                    with open(self.csv_path, "a") as f:
+                        writer = csv.writer(f, lineterminator='\n')
+                        for line in self.ret["csv_logs"]:
+                            s = ([base, *line])
+                            writer.writerow(s)
+                    self.logger.info("csv logged")
 
         def live(*args):
             while self.state_widget.value == 'connect':
