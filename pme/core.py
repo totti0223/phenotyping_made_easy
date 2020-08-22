@@ -51,7 +51,7 @@ class stream:
                         writer.writerow(self.ret["csv_header"])
 
             self.layout = {'width': str(
-                80/len(self.ret["images"]))+"%", 'height': '1px', 'border': '1px solid black'}
+                95/len(self.ret["images"]))+"%", 'height': '1px', 'border': '1px solid black'}
             for i in range(len(self.ret["images"])):
                 self.processed_image_widgets[str(i)] = ipywidgets.Image(
                     format='jpeg', value=bytes(cv2.imencode('.jpg', self.image)[1]), layout=self.layout)
@@ -126,12 +126,12 @@ class stream:
                 if self.image is not None:
                     if self.hide_input_widget.value == False:
                         self.image_widget.layout = {
-                            'width': "80%", 'border': '1px solid black'}
+                            'width': "95%", 'border': '1px solid black'}
                         self.image_widget.value = bytes(cv2.imencode(
                             '.jpg', self.image)[1])  # original input
                     else:
                         self.image_widget.layout = {
-                            'width': "80%", 'height': '1px', 'border': '1px solid black'}
+                            'width': "95%", 'height': '1px', 'border': '1px solid black'}
                         self.image_widget.value = bytes(cv2.imencode(
                             '.jpg', self.black)[1])  # original input
 
@@ -146,7 +146,7 @@ class stream:
                                 self.processed_image_widgets[str(i)].value = bytes(
                                     cv2.imencode('.jpg', image)[1])
                                 self.processed_image_widgets[str(i)].layout = {'width': str(
-                                    80/len(self.ret["images"]))+"%", 'border': '1px solid black'}
+                                    95/len(self.ret["images"]))+"%", 'border': '1px solid black'}
                                 
                         else:  # if checkbox is unticked, force the height of the layout to 1px and hide
                             if self.processed_image_widgets["0"].value != bytes(cv2.imencode('.jpg', self.black)[1]):
@@ -156,7 +156,7 @@ class stream:
                                 self.processed_image_widgets[str(i)].value = bytes(
                                     cv2.imencode('.jpg', self.black)[1])
                                 self.processed_image_widgets[str(i)].layout = {'width': str(
-                                    80/len(self.ret["images"]))+"%", 'height': '1px', 'border': '1px solid black'}
+                                    95/len(self.ret["images"]))+"%", 'height': '1px', 'border': '1px solid black'}
 
                         if self.ret["stream_logs"] and self.streamlogs_widget.value:
                              self.streamlogs_text_widget.value = str(self.ret["stream_logs"])
@@ -195,9 +195,9 @@ class stream:
             #options=['exit', 'disconnect', 'connect'], description='', value='disconnect')
         self.state_widget.observe(flag, names='value')
         self.fps_widget = ipywidgets.Text(
-            value="fps: "+str(self.fps), placeholder='stream_logs area', layout={"width": "80%",'border': '1px solid black'})
+            value="fps: "+str(self.fps), placeholder='stream_logs area', layout={"width": "95%",'border': '1px solid black'})
         self.image_widget = ipywidgets.Image(format='jpeg', value=bytes(cv2.imencode(
-            '.jpg', self.image)[1]), layout={"width": "80%", 'border': '1px solid black'})
+            '.jpg', self.image)[1]), layout={"width": "95%", 'border': '1px solid black'})
         self.acquire_image_widget = ipywidgets.Button(
             description="acquire image", tooltip="acquire image")
         self.hide_input_widget = ipywidgets.Checkbox(
@@ -233,11 +233,11 @@ class stream:
             if self.ret["stream_logs"] is not None:
                 self.streamlogs_widget = ipywidgets.Checkbox(
                 value=False, description="Display Stream Logs")
-                self.streamlogs_text_widget = ipywidgets.Text(layout={"width": "80%", 'border': '1px solid black'})
+                self.streamlogs_text_widget = ipywidgets.Text(layout={"width": "95%", 'border': '1px solid black'})
                 
                 self.container.insert(-1,self.streamlogs_text_widget) #stream logs    
                 checkboxes.insert(1,self.streamlogs_widget)
-            self.container.insert(2,ipywidgets.HBox(checkboxes,layout={"width": "80%"}))
+            self.container.insert(2,ipywidgets.HBox(checkboxes,layout={"width": "95%"}))
                 
         live_execution_widget = ipywidgets.VBox(self.container)
         display(live_execution_widget)
