@@ -18,7 +18,7 @@ from .utils import OutputWidgetHandler, wrapper
 
 
 class stream:
-    def __init__(self, pipeline_func=None, output_directory=None, camera_id=None, camera_sets=None, sanity_check_image=None):
+    def __init__(self, pipeline_func=None, output_directory=None, camera_id=None, videocapture_api_backend = None, camera_sets=None, sanity_check_image=None):
 
         self.image = np.zeros(shape=(100, 200, 3),
                               dtype=np.uint8)  # initial image. will be overrided by the sanity image and finally camera input.
@@ -59,8 +59,11 @@ class stream:
         assert self.camera_id is not None, "must specify a camera number for camera streaming"
 
         # assert video device is closed. must use a global variable for now
-        # cv2.VideoCapture(self.camera_id).release()        
-        self.camera = cv2.VideoCapture(self.camera_id)
+        # cv2.VideoCapture(self.camera_id).release()
+        if videocapture_api_backend is not None: 
+            self.camera = cv2.VideoCapture(self.camera_id, videocapture_api_backend)
+        else:
+            self.camera = cv2.VideoCapture(self.camera_id)
         assert self.camera.isOpened(
         ), "problem with establishing connection with camera. check connection or camera_id"
 

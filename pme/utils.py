@@ -12,7 +12,7 @@ class OutputWidgetHandler(logging.Handler):
     def __init__(self, *args, height='100px', **kwargs):
         super(OutputWidgetHandler, self).__init__(*args, **kwargs)
         layout = {
-            'width': '80%',
+            'width': '95%',
             'height': height,
             'border': '1px solid black'
         }
