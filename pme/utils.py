@@ -1,3 +1,5 @@
+import subprocess
+import re
 import logging
 
 import ipywidgets
@@ -61,3 +63,37 @@ def wrapper(func, image):
         ret["stream_logs"] = None
 
     return ret
+
+def scan_camera_settings(camera_id, camera_backend=None):
+    def _v4l2(camera_id):
+        # this command is for linux only
+        cmd = 'v4l2-ctl --device /dev/video' + \
+            str(camera_id) + ' --list-formats-ext'
+        proc = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE)
+        outs_bytes = proc.communicate()[0]
+        outs_str = outs_bytes.decode('utf-8')
+        assert "Failed" not in outs_str, "failed to fetch information. check connection or camera id."
+        outs_str_lists = outs_str.split('\n')
+        d = {}
+        i = 0
+        for line in outs_str_lists:
+            if "Pixel Format" in line:
+                pixelformat = line.split(":")[-1].strip()
+                if "MJPG" in pixelformat:
+                    pixelformat = ['M', 'J', 'P', 'G']
+                elif "YUYV" in pixelformat:
+                    pixelformat = ['Y', 'U', 'Y', 'V']                
+            if "Size:" in line:
+                resolution = line.split()[-1]
+            if "Interval" in line:
+                fps = re.findall("(?<=\().+?(?=\))", line)[0].split()[0]
+                _d = {"format": pixelformat, "height": int(resolution.split(
+                    "x")[1]), "width": int(resolution.split("x")[0]), "fps": int(float(fps))}
+                d[i] = _d
+                i += 1
+        return d
+    d = _v4l2(camera_id)
+    camera_list = []
+    for k, v in d.items():
+        camera_list.append(v)
+    return camera_list
