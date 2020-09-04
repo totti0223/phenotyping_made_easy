@@ -30,6 +30,10 @@ class stream:
         self.path = os.path.join(os.getcwd(), "data")
         self.videocapture_api_backend  = videocapture_api_backend
         
+        if output_directory == None:
+            self.path = os.path.join(os.getcwd(), "data")
+        else:
+            self.path = output_directory
 
         if not os.path.exists(self.path):
             os.makedirs(self.path)
