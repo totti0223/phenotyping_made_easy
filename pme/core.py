@@ -14,11 +14,11 @@ import numpy as np
 from IPython.display import display, Image, clear_output
 import ipywidgets
 
-from .utils import OutputWidgetHandler, wrapper
+from .utils import OutputWidgetHandler, wrapper,scan_camera_settings
 
 
 class stream:
-    def __init__(self, pipeline_func=None, output_directory=None, camera_id=None, camera_sets=None, sanity_check_image=None):
+    def __init__(self, pipeline_func=None, output_directory=None, camera_id=None, videocapture_api_backend = None, camera_sets=None, camera_initial_settings=None, sanity_check_image=None):
 
         self.image = np.zeros(shape=(100, 200, 3),
                               dtype=np.uint8)  # initial image. will be overrided by the sanity image and finally camera input.
@@ -27,11 +27,9 @@ class stream:
         self.pipeline_func = pipeline_func
         self.camera_sets = camera_sets
         self.black = np.zeros((1, 1, 3), dtype=np.uint8)
-
-        if output_directory == None:
-            self.path = os.path.join(os.getcwd(), "data")
-        else:
-            self.path = output_directory
+        self.path = os.path.join(os.getcwd(), "data")
+        self.videocapture_api_backend  = videocapture_api_backend
+        
 
         if not os.path.exists(self.path):
             os.makedirs(self.path)
@@ -61,10 +59,19 @@ class stream:
                     format='jpeg', value=bytes(cv2.imencode('.jpg', self.image)[1]), layout=self.layout)
 
         assert self.camera_id is not None, "must specify a camera number for camera streaming"
-
+        #get available camera settings
+        self.camera_settings_list = scan_camera_settings(self.camera_id)
+        #default settings if input
+        if camera_initial_settings:
+            self.camera_initial_settings = camera_initial_settings 
+            
+        
         # assert video device is closed. must use a global variable for now
-        # cv2.VideoCapture(self.camera_id).release()        
-        self.camera = cv2.VideoCapture(self.camera_id)
+        # cv2.VideoCapture(self.camera_id).release()
+        if self.videocapture_api_backend is not None: 
+            self.camera = cv2.VideoCapture(self.camera_id, self.videocapture_api_backend)
+        else:
+            self.camera = cv2.VideoCapture(self.camera_id)
         assert self.camera.isOpened(
         ), "problem with establishing connection with camera. check connection or camera_id"
 
@@ -73,6 +80,7 @@ class stream:
         success,frame = self.camera.read()
         assert success == True, "error reading image from camera. check camera settings e.g. resolution, fps, format"
         #print("\t- camera properly recognized")
+        self.camera.release()
 
         # fps
         self.fps = 0
@@ -91,7 +99,6 @@ class stream:
         
     def launch(self):
         def capture(_):
-            
             
             base = datetime.now().strftime("%Y%m%d_%H%M%S")
             basefile = base + ".jpg"
@@ -166,7 +173,7 @@ class stream:
                              self.streamlogs_text_widget.value = str(self.ret["stream_logs"])
                             
 
-        def flag(change):
+        def state_flag(change):
             if change['new'] == 'exit':
                 self.camera.release()
                 clear_output()
@@ -181,23 +188,65 @@ class stream:
 
             if change['new'] == 'connect':
                 if self.camera.isOpened() == False:
-                    self.camera = cv2.VideoCapture(self.camera_id)
+                    if self.videocapture_api_backend is not None: 
+                        self.camera = cv2.VideoCapture(self.camera_id, self.videocapture_api_backend)
+                    else:
+                        self.camera = cv2.VideoCapture(self.camera_id)
+                    d = self.camera_settings_widget.value
+                        
+                    self.camera.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*d["format"]))
+                    self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT,d["height"])
+                    self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, d["width"])
+                    self.camera.set(cv2.CAP_PROP_FPS, d["fps"])
+                    self.logger.info("camera settings set to: %s" % d)    
                     if self.camera_sets is not None:
                         self.camera_sets(self.camera)
                 args = self.container
                 execute_thread = threading.Thread(target=live, args=args)
                 execute_thread.start()
                 self.logger.info('Starting program')
-
+                
             if change['new'] == 'pause':
                 self.logger.info('Pausing program')
                 pass
+            
+        def camera_settings_flag(change):
+            #valid only when camera is disconnected. #chaning in streaming mode lead to freeze.
+            d = change["new"]
+            
+            if self.state_widget.value in ["connect","pause"]: #disconnect before changing settings
+                self.state_widget.value = "disconnect"
+            if self.videocapture_api_backend is not None: 
+                self.camera = cv2.VideoCapture(self.camera_id, self.videocapture_api_backend)
+            else:
+                self.camera = cv2.VideoCapture(self.camera_id)
+            self.camera.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*d["format"]))
+            self.camera.set(cv2.CAP_PROP_FPS, d["fps"])                
+            self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT,d["height"])
+            self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, d["width"])
+            self.logger.info("camera settings set to: %s" % d)
+            self.state_widget.value = "connect"
 
+            
+            
          # ipywidgets
         self.state_widget = ipywidgets.ToggleButtons(
             options=['exit', 'disconnect', 'pause', 'connect'], description='', value='pause')
             #options=['exit', 'disconnect', 'connect'], description='', value='disconnect')
-        self.state_widget.observe(flag, names='value')
+        self.state_widget.observe(state_flag, names='value')
+        
+        
+        _camera_default = self.camera_settings_list[0]
+        if self.camera_initial_settings:
+            _camera_default = self.camera_initial_settings
+        
+        self.camera_settings_widget = ipywidgets.Dropdown(
+            options=self.camera_settings_list,
+            value=_camera_default,
+            description='Camera_Settings:',
+            disabled=False, layout={"width": "95%"},style={'description_width': 'initial'})
+        self.camera_settings_widget.observe(camera_settings_flag, names='value')
+        
         self.fps_widget = ipywidgets.Text(
             value="fps: "+str(self.fps), placeholder='stream_logs area', layout={"width": "95%",'border': '1px solid black'})
         self.image_widget = ipywidgets.Image(format='jpeg', value=bytes(cv2.imencode(
@@ -209,7 +258,7 @@ class stream:
         #basic
         self.container = [self.state_widget, #select stat
                      self.acquire_image_widget, #capture button
-                     self.hide_input_widget,
+                     self.camera_settings_widget,
                      self.image_widget, #display input
                      self.fps_widget,  # fps
                      self.handler.out  # log
@@ -231,7 +280,7 @@ class stream:
                 value=False, description="Enable Image Analysis Pipeline")
             self.hide_input_widget = ipywidgets.Checkbox(
                 value=False, description="Hide Input")
-            del self.container[2] #delete hide_input_widget
+
             checkboxes = [self.image_analysis_widget, self.hide_input_widget]
             
             if self.ret["stream_logs"] is not None:
@@ -241,7 +290,7 @@ class stream:
                 
                 self.container.insert(-1,self.streamlogs_text_widget) #stream logs    
                 checkboxes.insert(1,self.streamlogs_widget)
-            self.container.insert(2,ipywidgets.HBox(checkboxes,layout={"width": "95%"}))
+            self.container.insert(3,ipywidgets.HBox(checkboxes,layout={"width": "95%"}))
                 
         live_execution_widget = ipywidgets.VBox(self.container)
         display(live_execution_widget)
