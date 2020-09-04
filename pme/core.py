@@ -27,7 +27,11 @@ class stream:
         self.pipeline_func = pipeline_func
         self.camera_sets = camera_sets
         self.black = np.zeros((1, 1, 3), dtype=np.uint8)
-        self.path = os.path.join(os.getcwd(), "data")
+
+        if output_directory == None:
+            self.path = os.path.join(os.getcwd(), "data")
+        else:
+            self.path = output_directory
 
         if not os.path.exists(self.path):
             os.makedirs(self.path)
