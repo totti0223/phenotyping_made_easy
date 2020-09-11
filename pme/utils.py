@@ -64,7 +64,7 @@ def wrapper(func, image):
 
     return ret
 
-def scan_camera_settings(camera_id, camera_backend=None):
+def scan_camera_settings(camera_id):
     def _v4l2(camera_id):
         # this command is for linux only
         cmd = 'v4l2-ctl --device /dev/video' + \
